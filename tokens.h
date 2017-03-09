@@ -24,7 +24,8 @@
 #define GET 14
 #define ASSIG 15
 #define IDTUBE 16
-#define SPACE 17
+#define TUBE 17
+#define SPACE 18
 
 #ifdef __USE_PROTOS
 void plumber(AST**_root);
@@ -51,6 +52,30 @@ extern void term();
 #endif
 
 #ifdef __USE_PROTOS
+void bool_expr(AST**_root);
+#else
+extern void bool_expr();
+#endif
+
+#ifdef __USE_PROTOS
+void bool_or(AST**_root);
+#else
+extern void bool_or();
+#endif
+
+#ifdef __USE_PROTOS
+void bool_not(AST**_root);
+#else
+extern void bool_not();
+#endif
+
+#ifdef __USE_PROTOS
+void bool_eval(AST**_root);
+#else
+extern void bool_eval();
+#endif
+
+#ifdef __USE_PROTOS
 void id_expr(AST**_root);
 #else
 extern void id_expr();
@@ -65,4 +90,7 @@ extern void getter();
 #endif
 extern SetWordType zzerr1[];
 extern SetWordType zzerr2[];
+extern SetWordType zzerr3[];
 extern SetWordType setwd1[];
+extern SetWordType zzerr4[];
+extern SetWordType setwd2[];

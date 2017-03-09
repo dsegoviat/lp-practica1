@@ -29,6 +29,12 @@ AST* createASTnode(Attrib* attr, int ttype, char *textt);
 #include <cmath>
 // function to fill token information
 
+struct Tube {
+    int longitude;
+    int diameter;
+};
+
+map<string, Tube> tubes;
 map<string,int> m;
 
 void zzcr_attr(Attrib *attr, int type, char *text) {
@@ -156,18 +162,19 @@ bool evaluateBoolExpr(AST *a) {
 }
 
 void execute(AST *a) {
+//     cout << "Hi: " << a->kind << endl;
     if (a == NULL) return;
-    else if  (a->kind == "=") {
+    else if (a->kind == "=") {
         m[child(a, 0)->text] = evaluateNumExpr(child(a, 1));
     }
     else if (a->kind == "GET") { // debug
         string key = child(a, 0)->text;
         cout << "Im getting the value for " << key << ": " << m[key] << endl; //DEBUG
     }
-    // else if (isBoolExpr(a)) {
-    //     cout << "I found a boolean expression. Result: "
-    //             << evaluateBoolExpr(child(a, 0)) << endl;
-    // }
+    else if (isBoolExpr(a)) {
+        cout << "I found a boolean expression. Result: " 
+                << evaluateBoolExpr(a) << endl;
+    }
     else { // exprnum (isNumExpr(a))
         cout << "Result: " << evaluateNumExpr(a) << endl;
     }
@@ -178,7 +185,7 @@ int main() {
     AST *root = NULL;
     ANTLR(plumber(&root), stdin);
     ASTPrint(root);
-    execute(root); // DEBUG
+    execute(root->down); 
 }
 >>
 
@@ -205,18 +212,32 @@ int main() {
 
 #token ASSIG "="
 
-#token IDTUBE "[a-zA-Z][a-zA-Z0-9]"
+#token IDTUBE "[a-zA-Z][a-zA-Z0-9]*"
+#token TUBE "TUBE"
 
 #token SPACE "[\ \n\t]" << zzskip();>>
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
-ops: num_expr | id_expr | getter /* bool_expr */;
+
+ops: id_expr | getter ;
+
 num_expr: term ((PLUS^ | MINUS^) term)* ;
 term: NUM (TIMES^ NUM)* ;
-//bool_expr: bool_term ((AND^ | OR^) bool_term)* ;
-//bool_term: (NOT^)? num_expr (AND^ | OR^) num_expr;
+
+bool_expr: bool_or (AND^ bool_or)*;
+bool_or: bool_not (OR^ bool_not)*;
+bool_not: NOT^ bool_eval | bool_eval;
+bool_eval: NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM;
+
+//bool_and: bool_eval (AND^ bool_eval)*;
+//bool_or: bool_and (OR^ bool_and)*;
+//bool_not: (NOT^)? bool_or;
+
 id_expr: IDTUBE ASSIG^ num_expr;
-getter: GET^ IDTUBE ; // debug
+
+//id_expr: IDTUBE ASSIG^ tube_expr;
+//tube_expr: TUBE^ num_expr num_expr;
+getter: GET^ IDTUBE ; 
 //...
 
 // TODO: remove getter and bool_expr from ops.

@@ -6,7 +6,7 @@
  * With AHPCRC, University of Minnesota
  * ANTLR Version 1.33MR33
  *
- *   antlr -gt plumber.g
+ *   /opt/pccts/bin/antlr -gt plumber.g
  *
  */
 
@@ -61,6 +61,12 @@ ANTLR_INFO
 #include <cmath>
 // function to fill token information
 
+struct Tube {
+  int longitude;
+  int diameter;
+};
+
+map<string, Tube> tubes;
 map<string,int> m;
 
 void zzcr_attr(Attrib *attr, int type, char *text) {
@@ -188,18 +194,19 @@ bool evaluateBoolExpr(AST *a) {
 }
 
 void execute(AST *a) {
+  //     cout << "Hi: " << a->kind << endl;
   if (a == NULL) return;
-  else if  (a->kind == "=") {
+  else if (a->kind == "=") {
     m[child(a, 0)->text] = evaluateNumExpr(child(a, 1));
   }
   else if (a->kind == "GET") { // debug
     string key = child(a, 0)->text;
     cout << "Im getting the value for " << key << ": " << m[key] << endl; //DEBUG
   }
-  // else if (isBoolExpr(a)) {
-    //     cout << "I found a boolean expression. Result: "
-    //             << evaluateBoolExpr(child(a, 0)) << endl;
-    // }
+  else if (isBoolExpr(a)) {
+    cout << "I found a boolean expression. Result: " 
+    << evaluateBoolExpr(a) << endl;
+  }
   else { // exprnum (isNumExpr(a))
     cout << "Result: " << evaluateNumExpr(a) << endl;
   }
@@ -210,7 +217,7 @@ int main() {
   AST *root = NULL;
   ANTLR(plumber(&root), stdin);
   ASTPrint(root);
-  execute(root->down);
+  execute(root->down); 
 }
 
 void
@@ -258,19 +265,14 @@ AST **_root;
   zzBLOCK(zztasp1);
   zzMake0;
   {
-  if ( (LA(1)==NUM) ) {
-    num_expr(zzSTR); zzlink(_root, &_sibling, &_tail);
+  if ( (LA(1)==IDTUBE) ) {
+    id_expr(zzSTR); zzlink(_root, &_sibling, &_tail);
   }
   else {
-    if ( (LA(1)==IDTUBE) ) {
-      id_expr(zzSTR); zzlink(_root, &_sibling, &_tail);
+    if ( (LA(1)==GET) ) {
+      getter(zzSTR); zzlink(_root, &_sibling, &_tail);
     }
-    else {
-      if ( (LA(1)==GET) ) {
-        getter(zzSTR); zzlink(_root, &_sibling, &_tail);
-      }
-      else {zzFAIL(1,zzerr1,&zzMissSet,&zzMissText,&zzBadTok,&zzBadText,&zzErrk); goto fail;}
-    }
+    else {zzFAIL(1,zzerr1,&zzMissSet,&zzMissText,&zzBadTok,&zzBadText,&zzErrk); goto fail;}
   }
   zzEXIT(zztasp1);
   return;
@@ -366,6 +368,149 @@ fail:
 
 void
 #ifdef __USE_PROTOS
+bool_expr(AST**_root)
+#else
+bool_expr(_root)
+AST **_root;
+#endif
+{
+  zzRULE;
+  zzBLOCK(zztasp1);
+  zzMake0;
+  {
+  bool_or(zzSTR); zzlink(_root, &_sibling, &_tail);
+  {
+    zzBLOCK(zztasp2);
+    zzMake0;
+    {
+    while ( (LA(1)==AND) ) {
+      zzmatch(AND); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+      bool_or(zzSTR); zzlink(_root, &_sibling, &_tail);
+      zzLOOP(zztasp2);
+    }
+    zzEXIT(zztasp2);
+    }
+  }
+  zzEXIT(zztasp1);
+  return;
+fail:
+  zzEXIT(zztasp1);
+  zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
+  zzresynch(setwd1, 0x40);
+  }
+}
+
+void
+#ifdef __USE_PROTOS
+bool_or(AST**_root)
+#else
+bool_or(_root)
+AST **_root;
+#endif
+{
+  zzRULE;
+  zzBLOCK(zztasp1);
+  zzMake0;
+  {
+  bool_not(zzSTR); zzlink(_root, &_sibling, &_tail);
+  {
+    zzBLOCK(zztasp2);
+    zzMake0;
+    {
+    while ( (LA(1)==OR) ) {
+      zzmatch(OR); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+      bool_not(zzSTR); zzlink(_root, &_sibling, &_tail);
+      zzLOOP(zztasp2);
+    }
+    zzEXIT(zztasp2);
+    }
+  }
+  zzEXIT(zztasp1);
+  return;
+fail:
+  zzEXIT(zztasp1);
+  zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
+  zzresynch(setwd1, 0x80);
+  }
+}
+
+void
+#ifdef __USE_PROTOS
+bool_not(AST**_root)
+#else
+bool_not(_root)
+AST **_root;
+#endif
+{
+  zzRULE;
+  zzBLOCK(zztasp1);
+  zzMake0;
+  {
+  if ( (LA(1)==NOT) ) {
+    zzmatch(NOT); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+    bool_eval(zzSTR); zzlink(_root, &_sibling, &_tail);
+  }
+  else {
+    if ( (LA(1)==NUM) ) {
+      bool_eval(zzSTR); zzlink(_root, &_sibling, &_tail);
+    }
+    else {zzFAIL(1,zzerr3,&zzMissSet,&zzMissText,&zzBadTok,&zzBadText,&zzErrk); goto fail;}
+  }
+  zzEXIT(zztasp1);
+  return;
+fail:
+  zzEXIT(zztasp1);
+  zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
+  zzresynch(setwd2, 0x1);
+  }
+}
+
+void
+#ifdef __USE_PROTOS
+bool_eval(AST**_root)
+#else
+bool_eval(_root)
+AST **_root;
+#endif
+{
+  zzRULE;
+  zzBLOCK(zztasp1);
+  zzMake0;
+  {
+  zzmatch(NUM); zzsubchild(_root, &_sibling, &_tail); zzCONSUME;
+  {
+    zzBLOCK(zztasp2);
+    zzMake0;
+    {
+    if ( (LA(1)==LTHAN) ) {
+      zzmatch(LTHAN); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+    }
+    else {
+      if ( (LA(1)==MTHAN) ) {
+        zzmatch(MTHAN); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+      }
+      else {
+        if ( (LA(1)==EQUALS) ) {
+          zzmatch(EQUALS); zzsubroot(_root, &_sibling, &_tail); zzCONSUME;
+        }
+        else {zzFAIL(1,zzerr4,&zzMissSet,&zzMissText,&zzBadTok,&zzBadText,&zzErrk); goto fail;}
+      }
+    }
+    zzEXIT(zztasp2);
+    }
+  }
+  zzmatch(NUM); zzsubchild(_root, &_sibling, &_tail); zzCONSUME;
+  zzEXIT(zztasp1);
+  return;
+fail:
+  zzEXIT(zztasp1);
+  zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
+  zzresynch(setwd2, 0x2);
+  }
+}
+
+void
+#ifdef __USE_PROTOS
 id_expr(AST**_root)
 #else
 id_expr(_root)
@@ -384,7 +529,7 @@ AST **_root;
 fail:
   zzEXIT(zztasp1);
   zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
-  zzresynch(setwd1, 0x40);
+  zzresynch(setwd2, 0x4);
   }
 }
 
@@ -407,6 +552,6 @@ AST **_root;
 fail:
   zzEXIT(zztasp1);
   zzsyn(zzMissText, zzBadTok, (ANTLRChar *)"", zzMissSet, zzMissTok, zzErrk, zzBadText);
-  zzresynch(setwd1, 0x80);
+  zzresynch(setwd2, 0x8);
   }
 }

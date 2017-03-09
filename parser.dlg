@@ -132,9 +132,14 @@ GET
 		NLA = ASSIG;
 	>>
 
-[a-zA-Z][a-zA-Z0-9]
+[a-zA-Z][a-zA-Z0-9]*
 	<<
 		NLA = IDTUBE;
+	>>
+
+TUBE
+	<<
+		NLA = TUBE;
 	>>
 
 [\ \n\t]
