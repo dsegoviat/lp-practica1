@@ -7,6 +7,7 @@
 using namespace std;
 
 // struct to store information about tokens
+
 typedef struct {
     string kind;
     string text;
@@ -30,7 +31,7 @@ AST* createASTnode(Attrib* attr, int ttype, char *textt);
 // function to fill token information
 
 struct Tube {
-    int longitude;
+    int length;
     int diameter;
 };
 
@@ -161,15 +162,29 @@ bool evaluateBoolExpr(AST *a) {
     return false;
 }
 
+void storeTube(string text, AST *a) {
+    Tube tempTube;
+    int length = evaluateNumExpr(child(a, 0));
+    int diam = evaluateNumExpr(child(a, 1));
+    cout << "VALUES FOT " << text << " LENGTH: " << length << ", DIAM: " << diam << endl;
+    tempTube.length = length;
+    tempTube.diameter = diam;
+    tubes[text] = tempTube;
+}
+
 void execute(AST *a) {
 //     cout << "Hi: " << a->kind << endl;
     if (a == NULL) return;
     else if (a->kind == "=") {
-        m[child(a, 0)->text] = evaluateNumExpr(child(a, 1));
+        if (child(a, 1)->kind == "TUBE") {
+            cout << "IM HERE TUBE " << endl;            
+            storeTube(child(a, 0)->text, child(a, 1));
+            // m[child(a, 0)->text] = evaluateNumExpr(child(a, 1));
+        }
     }
     else if (a->kind == "GET") { // debug
         string key = child(a, 0)->text;
-        cout << "Im getting the value for " << key << ": " << m[key] << endl; //DEBUG
+        cout << "Im getting the value for " << key << " LENGTH: " << tubes[key].diameter << ", DIAMETER: " << tubes[key].diameter << endl; //DEBUG
     }
     else if (isBoolExpr(a)) {
         cout << "I found a boolean expression. Result: " 
@@ -212,8 +227,9 @@ int main() {
 
 #token ASSIG "="
 
-#token IDTUBE "[a-zA-Z][a-zA-Z0-9]*"
 #token TUBE "TUBE"
+#token IDTUBE "[a-zA-Z][a-zA-Z0-9]*"
+
 
 #token SPACE "[\ \n\t]" << zzskip();>>
 
@@ -229,11 +245,8 @@ bool_or: bool_not (OR^ bool_not)*;
 bool_not: NOT^ bool_eval | bool_eval;
 bool_eval: NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM;
 
-//bool_and: bool_eval (AND^ bool_eval)*;
-//bool_or: bool_and (OR^ bool_and)*;
-//bool_not: (NOT^)? bool_or;
-
-id_expr: IDTUBE ASSIG^ num_expr;
+id_expr: IDTUBE ASSIG^ tube_expr;
+tube_expr: TUBE^ num_expr num_expr;
 
 //id_expr: IDTUBE ASSIG^ tube_expr;
 //tube_expr: TUBE^ num_expr num_expr;
