@@ -42,7 +42,7 @@ void zzcr_attr(Attrib *attr, int type, char *text) {
     if (type == NUM) {
         attr->kind = "intconst";
         attr->text = text;
-    } else if (type == IDTUBE) {
+    } else if (type == ID) {
         attr->kind = "id";
         attr->text = text;
     } else {
@@ -111,6 +111,16 @@ void ASTPrint(AST *a)
     }
 }
 
+int getLength(AST *a) {
+    string key = a->text;
+    return tubes[key].length;
+}
+
+int getDiameter(AST *a) {
+    string key = a->text;
+    return tubes[key].diameter;
+}
+
 bool isNumExpr(AST *a) {
     return a->kind == "+" or a->kind == "-" or a->kind == "*" ;
 }
@@ -123,19 +133,15 @@ bool isBoolExpr(AST *a) {
 int evaluateNumExpr(AST *a) {
     if (a == NULL) return 0;
     else if (a->kind == "intconst") {
-        cout << "Returning constant: "<< atoi(a->text.c_str()) << endl; // debug
         return atoi(a->text.c_str());
     }
     else if (a->kind == "+") {
-        cout << "Sum: " << child(a, 0)->text << " + " << child(a, 1)->text << endl;
         return evaluateNumExpr(child(a,0)) + evaluateNumExpr(child(a,1));
     }
     else if (a->kind == "-") {
-        cout << "Sub: " << child(a, 0)->text << " - " << child(a, 1)->text << endl;
         return evaluateNumExpr(child(a,0)) - evaluateNumExpr(child(a,1));
     }
     else if (a->kind == "*") {
-        cout << "Mult: " << child(a, 0)->text << " * " << child(a, 1)->text << endl;
         return evaluateNumExpr(child(a,0)) * evaluateNumExpr(child(a,1));
     }
 }
@@ -159,6 +165,12 @@ bool evaluateBoolExpr(AST *a) {
     else if (a->kind == "==") {
         return evaluateNumExpr(child(a, 0)) == evaluateNumExpr(child(a, 1));
     }
+    else if (a->kind == "LENGTH") {
+        return getLength(child(a, 0));
+    }
+    else if (a->kind == "DIAMETER") {
+        return getDiameter(child(a, 0));
+    }
     return false;
 }
 
@@ -166,25 +178,27 @@ void storeTube(string text, AST *a) {
     Tube tempTube;
     int length = evaluateNumExpr(child(a, 0));
     int diam = evaluateNumExpr(child(a, 1));
-    cout << "VALUES FOT " << text << " LENGTH: " << length << ", DIAM: " << diam << endl;
     tempTube.length = length;
     tempTube.diameter = diam;
     tubes[text] = tempTube;
 }
 
 void execute(AST *a) {
-//     cout << "Hi: " << a->kind << endl;
     if (a == NULL) return;
     else if (a->kind == "=") {
         if (child(a, 1)->kind == "TUBE") {
-            cout << "IM HERE TUBE " << endl;            
             storeTube(child(a, 0)->text, child(a, 1));
-            // m[child(a, 0)->text] = evaluateNumExpr(child(a, 1));
         }
     }
     else if (a->kind == "GET") { // debug
         string key = child(a, 0)->text;
-        cout << "Im getting the value for " << key << " LENGTH: " << tubes[key].diameter << ", DIAMETER: " << tubes[key].diameter << endl; //DEBUG
+        cout << "Im getting the value for " << key << " LENGTH: " << tubes[key].length << ", DIAMETER: " << tubes[key].diameter << endl; //DEBUG
+    }
+    else if (a->kind == "LENGTH") {
+        cout << getLength(child(a, 0)) << endl;
+    }
+    else if (a->kind == "DIAMETER") {
+        cout << getDiameter(child(a, 0)) << endl;
     }
     else if (isBoolExpr(a)) {
         cout << "I found a boolean expression. Result: " 
@@ -227,30 +241,34 @@ int main() {
 
 #token ASSIG "="
 
+#token LENGTH "LENGTH"
+#token DIAMETER "DIAMETER"
 #token TUBE "TUBE"
-#token IDTUBE "[a-zA-Z][a-zA-Z0-9]*"
+#token ID "[a-zA-Z][a-zA-Z0-9]*"
 
 
 #token SPACE "[\ \n\t]" << zzskip();>>
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
 
-ops: id_expr | getter ;
+ops: id_expr | getter | getters;
 
 num_expr: term ((PLUS^ | MINUS^) term)* ;
-term: NUM (TIMES^ NUM)* ;
+term: NUM (TIMES^ NUM)* | getters;
 
 bool_expr: bool_or (AND^ bool_or)*;
 bool_or: bool_not (OR^ bool_not)*;
 bool_not: NOT^ bool_eval | bool_eval;
 bool_eval: NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM;
 
-id_expr: IDTUBE ASSIG^ tube_expr;
+getters: (LENGTH^ | DIAMETER^) LPAR! ID RPAR!;
+
+id_expr: ID ASSIG^ tube_expr;
 tube_expr: TUBE^ num_expr num_expr;
 
-//id_expr: IDTUBE ASSIG^ tube_expr;
+//id_expr: ID ASSIG^ tube_expr;
 //tube_expr: TUBE^ num_expr num_expr;
-getter: GET^ IDTUBE ; 
+getter: GET^ ID ; 
 //...
 
 // TODO: remove getter and bool_expr from ops.
