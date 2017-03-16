@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <map>
+#include <vector>
 
 using namespace std;
 
@@ -35,6 +36,7 @@ struct Tube {
     int diameter;
 };
 
+map<string, vector<string> > tubeVectors;
 map<string, Tube> tubes;
 map<string,int> m;
 
@@ -174,13 +176,21 @@ bool evaluateBoolExpr(AST *a) {
     return false;
 }
 
-void storeTube(string text, AST *a) {
+void storeTube(string key, AST *a) {
     Tube tempTube;
     int length = evaluateNumExpr(child(a, 0));
     int diam = evaluateNumExpr(child(a, 1));
     tempTube.length = length;
     tempTube.diameter = diam;
-    tubes[text] = tempTube;
+    tubes[key] = tempTube;
+}
+
+
+void createTubeVector(string key, AST *a) {
+//atoi(a->text.c_str())
+    int size = atoi(child(a, 0)->text.c_str());
+    vector<string> tempTube(size, "null");
+    tubeVectors[key] = tempTube;
 }
 
 void execute(AST *a) {
@@ -189,10 +199,17 @@ void execute(AST *a) {
         if (child(a, 1)->kind == "TUBE") {
             storeTube(child(a, 0)->text, child(a, 1));
         }
+        else if (child(a, 1)->kind == "TUBEVECTOR") {
+	    createTubeVector(child(a, 0)->text, child(a, 1));
+        }
     }
     else if (a->kind == "GET") { // debug
         string key = child(a, 0)->text;
         cout << "Im getting the value for " << key << " LENGTH: " << tubes[key].length << ", DIAMETER: " << tubes[key].diameter << endl; //DEBUG
+    }
+    else if (a->kind == "GETVECTOR") { // debug
+        string key = child(a, 0)->text;
+        cout << "Getting vector: " << key  << " of size: " << tubeVectors[key].size() << endl; //DEBUG
     }
     else if (a->kind == "LENGTH") {
         cout << getLength(child(a, 0)) << endl;
@@ -237,12 +254,14 @@ int main() {
 #token LPAR "\("
 #token RPAR "\)"
 
+#token GETVECTOR "GETVECTOR" // debug
 #token GET "GET" // debug
 
 #token ASSIG "="
 
 #token LENGTH "LENGTH"
 #token DIAMETER "DIAMETER"
+#token TUBEVECTOR "TUBEVECTOR"
 #token TUBE "TUBE"
 #token ID "[a-zA-Z][a-zA-Z0-9]*"
 
@@ -251,7 +270,7 @@ int main() {
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
 
-ops: id_expr | getter | getters;
+ops: id_expr | getter | getters | gettervector;
 
 num_expr: term ((PLUS^ | MINUS^) term)* ;
 term: NUM (TIMES^ NUM)* | getters;
@@ -264,11 +283,13 @@ bool_eval: NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM;
 getters: (LENGTH^ | DIAMETER^) LPAR! ID RPAR!;
 
 id_expr: ID ASSIG^ tube_expr;
-tube_expr: TUBE^ num_expr num_expr;
+tube_expr: (TUBEVECTOR^ | (TUBE^ num_expr)) num_expr;
 
-//id_expr: ID ASSIG^ tube_expr;
-//tube_expr: TUBE^ num_expr num_expr;
-getter: GET^ ID ; 
+
+getter: GET^ ID ; // DEBUG
+gettervector: GETVECTOR^ ID ; // DEBUG
+
+
 //...
 
 // TODO: remove getter and bool_expr from ops.
