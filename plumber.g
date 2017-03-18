@@ -38,7 +38,7 @@ struct Tube {
 
 map<string, vector<string> > tubeVectors;
 map<string, Tube> tubes;
-map<string,int> m;
+map<string, int> connectors;
 
 void zzcr_attr(Attrib *attr, int type, char *text) {
     if (type == NUM) {
@@ -81,8 +81,7 @@ AST* child(AST *a,int n) {
 }
 
 /// print AST, recursively, with indentation
-void ASTPrintIndent(AST *a,string s)
-{
+void ASTPrintIndent(AST *a,string s) {
     if (a==NULL) return;
 
     cout<<a->kind;
@@ -104,8 +103,7 @@ void ASTPrintIndent(AST *a,string s)
 }
 
 /// print AST
-void ASTPrint(AST *a)
-{
+void ASTPrint(AST *a) {
     while (a!=NULL) {
         cout<<" ";
         ASTPrintIndent(a,"");
@@ -129,8 +127,26 @@ bool isNumExpr(AST *a) {
 
 bool isBoolExpr(AST *a) {
     return a->kind == "<" or a->kind == ">" or a->kind == "=="
-            or a->kind == "AND" or a->kind == "OR" or a->kind == "NOT";
+            or a->kind == "AND" or a->kind == "OR" or a->kind == "NOT"
+            or a->kind == "EMPTY" or a->kind == "FULL";
 }
+
+bool isVectorEmpty(string key){
+    vector<string> temp = tubeVectors[key];
+    for (int i = 0; i < temp.size(); ++i) {
+        if (temp[i] != "null") return true;
+    }
+    return false;
+}
+
+bool isVectorFull(string key){
+    vector<string> temp = tubeVectors[key];
+    for (int i = 0; i < temp.size(); ++i) {
+        if (temp[i] == "null") return false;
+    }
+    return true;
+}
+
 
 int evaluateNumExpr(AST *a) {
     if (a == NULL) return 0;
@@ -167,11 +183,13 @@ bool evaluateBoolExpr(AST *a) {
     else if (a->kind == "==") {
         return evaluateNumExpr(child(a, 0)) == evaluateNumExpr(child(a, 1));
     }
-    else if (a->kind == "LENGTH") {
-        return getLength(child(a, 0));
+    else if (a->kind == "FULL") {
+        string key = child(a, 0)->text;
+        return isVectorFull(key);
     }
-    else if (a->kind == "DIAMETER") {
-        return getDiameter(child(a, 0));
+    else if (a->kind == "EMPTY") {
+        string key = child(a, 0)->text;
+        return isVectorFull(key);
     }
     return false;
 }
@@ -185,12 +203,21 @@ void storeTube(string key, AST *a) {
     tubes[key] = tempTube;
 }
 
+void storeConnector(string key, AST *a) {
+    cout << "Storing connector, key: " <<
+        key << ", value: " << child(a, 0)->text << endl;
+    connectors[key] = atoi(child(a, 0)->text.c_str());
+}
+
 
 void createTubeVector(string key, AST *a) {
-//atoi(a->text.c_str())
     int size = atoi(child(a, 0)->text.c_str());
     vector<string> tempTube(size, "null");
     tubeVectors[key] = tempTube;
+}
+
+void copyVector(string copy, string copied) {
+    tubes[copy] = tubes[copied];
 }
 
 void execute(AST *a) {
@@ -200,7 +227,14 @@ void execute(AST *a) {
             storeTube(child(a, 0)->text, child(a, 1));
         }
         else if (child(a, 1)->kind == "TUBEVECTOR") {
-	    createTubeVector(child(a, 0)->text, child(a, 1));
+	        createTubeVector(child(a, 0)->text, child(a, 1));
+        }
+        else if (child(a, 1)->kind == "CONNECTOR") {
+            storeConnector(child(a, 0)->text, child(a, 1));
+        }
+        else if (child(a, 1)->kind == "id") {
+            cout << "I found a copy" << endl;
+            copyVector(child(a, 0)->text, child(a, 1)->text);
         }
     }
     else if (a->kind == "GET") { // debug
@@ -209,7 +243,11 @@ void execute(AST *a) {
     }
     else if (a->kind == "GETVECTOR") { // debug
         string key = child(a, 0)->text;
-        cout << "Getting vector: " << key  << " of size: " << tubeVectors[key].size() << endl; //DEBUG
+        cout << "Getting vector: " << key << " of size: " << tubeVectors[key].size() << endl; // debug
+    }
+    else if (a->kind == "GETCON") { // debug
+        string key = child(a, 0)->text;
+        cout << "Im getting the value for " << key << ": " << connectors[key] << endl; // debug
     }
     else if (a->kind == "LENGTH") {
         cout << getLength(child(a, 0)) << endl;
@@ -218,7 +256,7 @@ void execute(AST *a) {
         cout << getDiameter(child(a, 0)) << endl;
     }
     else if (isBoolExpr(a)) {
-        cout << "I found a boolean expression. Result: " 
+        cout << "I found a boolean expression. Result: "
                 << evaluateBoolExpr(a) << endl;
     }
     else { // exprnum (isNumExpr(a))
@@ -231,7 +269,7 @@ int main() {
     AST *root = NULL;
     ANTLR(plumber(&root), stdin);
     ASTPrint(root);
-    execute(root->down); 
+    execute(root->down);
 }
 >>
 
@@ -255,14 +293,24 @@ int main() {
 #token RPAR "\)"
 
 #token GETVECTOR "GETVECTOR" // debug
+#token GETCONNECTOR "GETCON"
 #token GET "GET" // debug
 
 #token ASSIG "="
 
 #token LENGTH "LENGTH"
 #token DIAMETER "DIAMETER"
+
+#token FULL "FULL"
+#token EMPTY "EMPTY"
+
 #token TUBEVECTOR "TUBEVECTOR"
+#token OF "OF"
 #token TUBE "TUBE"
+#token CONNECTOR "CONNECTOR"
+
+#token MERGE "MERGE"
+
 #token ID "[a-zA-Z][a-zA-Z0-9]*"
 
 
@@ -270,7 +318,7 @@ int main() {
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
 
-ops: id_expr | getter | getters | gettervector;
+ops: id_expr | getter | getters | gettervector | bool_expr | merge_expr;
 
 num_expr: term ((PLUS^ | MINUS^) term)* ;
 term: NUM (TIMES^ NUM)* | getters;
@@ -278,16 +326,21 @@ term: NUM (TIMES^ NUM)* | getters;
 bool_expr: bool_or (AND^ bool_or)*;
 bool_or: bool_not (OR^ bool_not)*;
 bool_not: NOT^ bool_eval | bool_eval;
-bool_eval: NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM;
+bool_eval: (NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM) | bool_vector;
+bool_vector: (FULL^ | EMPTY^) LPAR! ID RPAR!;
 
 getters: (LENGTH^ | DIAMETER^) LPAR! ID RPAR!;
 
-id_expr: ID ASSIG^ tube_expr;
-tube_expr: (TUBEVECTOR^ | (TUBE^ num_expr)) num_expr;
+id_expr: ID ASSIG^ (tube_expr | ID | merge_expr);
+merge_expr: MERGE^ merge_basic_expr merge_basic_expr merge_basic_expr;
+merge_basic_expr: ID | (MERGE^ ID ID ID);
+tube_expr: (CONNECTOR^ | TUBEVECTOR^ OF!| (TUBE^ num_expr)) num_expr;
+
 
 
 getter: GET^ ID ; // DEBUG
 gettervector: GETVECTOR^ ID ; // DEBUG
+gettercon: GETCON^ ID ; // DEBUG
 
 
 //...
