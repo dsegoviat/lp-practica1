@@ -102,6 +102,9 @@ void ASTPrintIndent(AST *a,string s) {
     }
 }
 
+void error(string msg) {
+    cout << "Error: " << msg << "." << endl;
+}
 /// print AST
 void ASTPrint(AST *a) {
     while (a!=NULL) {
@@ -111,14 +114,24 @@ void ASTPrint(AST *a) {
     }
 }
 
-int getLength(AST *a) {
+int getLength(AST *a, bool &result) {
     string key = a->text;
-    return tubes[key].length;
+    map<string, Tube>::iterator it = tubes.find(key);
+    result = (it != tubes.end());
+    int length;
+    if (result) length = tubes[key].length;
+    else length = 0;
+    return length;
 }
 
-int getDiameter(AST *a) {
+int getDiameter(AST *a, bool &result) {
     string key = a->text;
-    return tubes[key].diameter;
+    map<string, Tube>::iterator it = tubes.find(key);
+    result = (it != tubes.end());
+    int diameter;
+    if (result) diameter = tubes[key].diameter;
+    else diameter = 0;
+    return diameter;
 }
 
 bool isNumExpr(AST *a) {
@@ -162,6 +175,25 @@ int evaluateNumExpr(AST *a) {
     else if (a->kind == "*") {
         return evaluateNumExpr(child(a,0)) * evaluateNumExpr(child(a,1));
     }
+    else if (a->kind == "DIAMETER") {
+        bool found = false;
+        int diameter = getDiameter(child(a, 0), found);
+        if (!found) {
+            error(child(a, 0)->text + " does not exist");
+            return 0;
+        }
+        else return diameter;
+    }
+    else if (a->kind == "LENGTH") {
+        bool found = false;
+        int length = getLength(child(a, 0), found);
+        if (!found) {
+            error(child(a, 0)->text + " does not exist");
+            return 0;
+        }
+        else return length;
+    }
+    else return 0;
 }
 
 bool evaluateBoolExpr(AST *a) {
@@ -204,9 +236,7 @@ void storeTube(string key, AST *a) {
 }
 
 void storeConnector(string key, AST *a) {
-    cout << "Storing connector, key: " <<
-        key << ", value: " << child(a, 0)->text << endl;
-    connectors[key] = atoi(child(a, 0)->text.c_str());
+    connectors[key] = evaluateNumExpr(child(a, 0));
 }
 
 
@@ -218,6 +248,73 @@ void createTubeVector(string key, AST *a) {
 
 void copyVector(string copy, string copied) {
     tubes[copy] = tubes[copied];
+}
+
+void consumeTube(string tube) {
+    tubes.erase(tube);
+}
+
+void consumeConnector(string connector) {
+    connectors.erase(connector);
+}
+
+// result stores a boolean that indicates if the tube returned is correct
+Tube mergeTubeAux(AST *a, bool &result) {
+    map<string, Tube>::iterator it;
+    it = tubes.find(a->text);
+    result = (it != tubes.end());
+    return tubes[a->text];
+}
+
+int mergeConnector(AST *a, bool &result) {
+    map<string, int>::iterator it;
+    it = connectors.find(a->text);
+    result = (it != connectors.end());
+    return connectors[a->text];
+}
+
+Tube mergeTube(AST *a, bool& res, vector<string> &toEraseTubes,
+    vector<string> &toEraseConnectors) {
+    Tube tubeResult;
+    bool res1, res2, res3;
+    Tube tube1, tube2;
+    int connector;
+
+    if (child(a, 0)->kind != "MERGE") {
+        tube1 = mergeTubeAux(child(a, 0), res1);
+        toEraseTubes.push_back(child(a, 0)->text);
+    }
+    else tube1 = mergeTube(child(a, 0), res1, toEraseTubes, toEraseConnectors);
+
+    if (child(a, 1)->kind != "MERGE") {
+        connector = mergeConnector(child(a, 1), res2);
+        toEraseConnectors.push_back(child(a, 1)->text);
+    }
+    else res2 = false;
+
+    if (child(a, 2)->kind != "MERGE") {
+        tube2 = mergeTubeAux(child(a, 2), res3);
+        toEraseTubes.push_back(child(a, 2)->text);
+    }
+    else tube2 = mergeTube(child(a, 2), res3, toEraseTubes, toEraseConnectors);
+
+    // error handling
+    if (!res1) error("Tube " + child(a, 0)->text + " does not exist");
+    if (!res2) error("Connector " + child(a, 1)->text + " does not exist");
+    if (!res3) error("Tube " + child(a, 2)->text + " does not exist");
+
+    res = res1 and res2 and res3;
+    if (res) {
+        if (tube1.diameter != tube2.diameter or tube1.diameter != connector) {
+            cout << "Error: diameters do not match" << endl;
+            res = false;
+        }
+        else {
+            tubeResult.length = tube1.length + tube2.length;
+            tubeResult.diameter = tube1.diameter;
+        }
+    }
+    return tubeResult;
 }
 
 void execute(AST *a) {
@@ -236,6 +333,21 @@ void execute(AST *a) {
             cout << "I found a copy" << endl;
             copyVector(child(a, 0)->text, child(a, 1)->text);
         }
+        else if (child(a, 1)->kind == "MERGE") {
+            bool correct = false;
+            vector<string> toEraseTubes;
+            vector<string> toEraseConnectors;
+            Tube tubeTemp = mergeTube(child(a, 1), correct, toEraseTubes, toEraseConnectors);
+            if (correct) {
+                string key = child(a, 0)->text;
+                tubes[key] = tubeTemp;
+                for (int i = 0; i < toEraseTubes.size(); ++i)
+                    consumeTube(toEraseTubes[i]);
+                for (int i = 0; i < toEraseConnectors.size(); ++i)
+                    consumeConnector(toEraseConnectors[i]);
+            }
+            else error("Unable to perform MERGE");
+        }
     }
     else if (a->kind == "GET") { // debug
         string key = child(a, 0)->text;
@@ -250,10 +362,16 @@ void execute(AST *a) {
         cout << "Im getting the value for " << key << ": " << connectors[key] << endl; // debug
     }
     else if (a->kind == "LENGTH") {
-        cout << getLength(child(a, 0)) << endl;
+        bool found = false;
+        int length = getLength(child(a, 0), found);
+        if (!found) error(child(a, 0)->text + " does not exist");
+        else cout << length << endl;
     }
     else if (a->kind == "DIAMETER") {
-        cout << getDiameter(child(a, 0)) << endl;
+        bool found = false;
+        int length = getDiameter(child(a, 0), found);
+        if (!found) error(child(a, 0)->text +" does not exist");
+        else cout << length << endl;
     }
     else if (isBoolExpr(a)) {
         cout << "I found a boolean expression. Result: "
@@ -292,8 +410,8 @@ int main() {
 #token LPAR "\("
 #token RPAR "\)"
 
-#token GETVECTOR "GETVECTOR" // debug
 #token GETCONNECTOR "GETCON"
+#token GETVECTOR "GETVECTOR" // debug
 #token GET "GET" // debug
 
 #token ASSIG "="
@@ -318,13 +436,13 @@ int main() {
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
 
-ops: id_expr | getter | getters | gettervector | bool_expr | merge_expr;
+ops: id_expr | getters | getters_debug | bool_expr | merge_expr;
 
 num_expr: term ((PLUS^ | MINUS^) term)* ;
-term: NUM (TIMES^ NUM)* | getters;
+term: (NUM | getters) (TIMES^ (getters | NUM))*;
 
-bool_expr: bool_or (AND^ bool_or)*;
-bool_or: bool_not (OR^ bool_not)*;
+bool_expr: bool_and (OR^ bool_and)*;
+bool_and: bool_not (AND^ bool_not)*;
 bool_not: NOT^ bool_eval | bool_eval;
 bool_eval: (NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM) | bool_vector;
 bool_vector: (FULL^ | EMPTY^) LPAR! ID RPAR!;
@@ -337,10 +455,10 @@ merge_basic_expr: ID | (MERGE^ ID ID ID);
 tube_expr: (CONNECTOR^ | TUBEVECTOR^ OF!| (TUBE^ num_expr)) num_expr;
 
 
-
+getters_debug:gettercon | getter | gettervector;
 getter: GET^ ID ; // DEBUG
 gettervector: GETVECTOR^ ID ; // DEBUG
-gettercon: GETCON^ ID ; // DEBUG
+gettercon: GETCONNECTOR^ ID ; // DEBUG
 
 
 //...
