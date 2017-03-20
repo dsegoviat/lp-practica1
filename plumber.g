@@ -147,9 +147,9 @@ bool isBoolExpr(AST *a) {
 bool isVectorEmpty(string key){
     vector<string> temp = tubeVectors[key];
     for (int i = 0; i < temp.size(); ++i) {
-        if (temp[i] != "null") return true;
+        if (temp[i] != "null") return false;
     }
-    return false;
+    return true;
 }
 
 bool isVectorFull(string key){
@@ -317,6 +317,86 @@ Tube mergeTube(AST *a, bool& res, vector<string> &toEraseTubes,
     return tubeResult;
 }
 
+void pushToVector(string vector, string tube) {
+    // handle errors
+    bool found = tubeVectors.find(vector) != tubeVectors.end();
+    if (!found) error(vector + " vector does not exist");
+
+    bool found2 = tubes.find(tube) != tubes.end();
+    if (!found2) error(tube + " tube does not exist");
+    if (found and found2) {
+        std::vector<string> vectorTemp = tubeVectors[vector];
+        int size = vectorTemp.size();
+
+        // handle error
+        if (vectorTemp[size - 1] != "null") error("Vector " + vector + " is full");
+
+        else {
+            bool stop = false;
+            int i = 0;
+            while (i < size and !stop) {
+                if (vectorTemp[i] == "null") {
+                    stop = true;
+                    vectorTemp[i] = tube;
+                }
+                ++i;
+            }
+            tubeVectors[vector] = vectorTemp;
+        }
+    }
+
+}
+
+void popFromVector(string vector, string tube) {
+    // handle errors
+    bool found = tubeVectors.find(vector) != tubeVectors.end();
+    if (!found) error(vector + " vector does not exist");
+
+    if (found) {
+        cout << "Here i am" << endl;
+        std::vector<string> vectorTemp = tubeVectors[vector];
+        bool isEmpty = isVectorEmpty(vector);
+        // handle error
+        if (isEmpty) error("The vector " + vector + " is empty");
+        else {
+            cout << "Im here" << endl;
+            int size = vectorTemp.size();
+            bool stop = false;
+            int i = size - 1;
+            while (i >= 0 and !stop) {
+                if (vectorTemp[i] != "null") {
+                    stop = true;
+                    string oldTube = vectorTemp[i];
+                    cout << "Old tube " << oldTube << endl;
+                    Tube tubeTemp = tubes[oldTube];
+                    tubes[tube] = tubeTemp;
+                    consumeTube(oldTube);
+                }
+                --i;
+            }
+        }
+    }
+}
+
+void splitTube(string tube1, string tube2, string splittedTube) {
+    bool found = tubes.find(splittedTube) != tubes.end();
+    if (!found) error(splittedTube + "does not exist");
+    else {
+        Tube tubeTemp = tubes[splittedTube];
+        Tube temp1, temp2;
+        temp1.diameter = temp2.diameter = tubeTemp.diameter;
+        if (tubeTemp.length%2 == 0)
+            temp1.length = temp2.length = tubeTemp.length/2;
+        else {
+            temp1.length = tubeTemp.length/2;
+            temp2.length = tubeTemp.length/2 + 1;
+        }
+        tubes[tube1] = temp1;
+        tubes[tube2] = temp2;
+        consumeTube(splittedTube);
+    }
+}
+
 void execute(AST *a) {
     if (a == NULL) return;
     else if (a->kind == "=") {
@@ -373,6 +453,15 @@ void execute(AST *a) {
         if (!found) error(child(a, 0)->text +" does not exist");
         else cout << length << endl;
     }
+    else if (a->kind == "PUSH") {
+        pushToVector(child(a, 0)->text, child(a, 1)->text);
+    }
+    else if (a->kind == "POP") {
+        popFromVector(child(a, 0)->text, child(a, 1)->text);
+    }
+    else if (a->kind == "SPLIT") {
+        splitTube(child(a, 0)->text, child(a, 1)->text, child(a, 2)->text);
+    }
     else if (isBoolExpr(a)) {
         cout << "I found a boolean expression. Result: "
                 << evaluateBoolExpr(a) << endl;
@@ -419,6 +508,9 @@ int main() {
 #token LENGTH "LENGTH"
 #token DIAMETER "DIAMETER"
 
+#token PUSH "PUSH"
+#token POP "POP"
+
 #token FULL "FULL"
 #token EMPTY "EMPTY"
 
@@ -429,6 +521,11 @@ int main() {
 
 #token MERGE "MERGE"
 
+#token SPLIT "SPLIT"
+
+#token WHILE "WHILE"
+#token ENDWHILE "ENDWHILE"
+
 #token ID "[a-zA-Z][a-zA-Z0-9]*"
 
 
@@ -436,15 +533,19 @@ int main() {
 
 plumber: (ops)* <<#0=createASTlist(_sibling);>>;
 
-ops: id_expr | getters | getters_debug | bool_expr | merge_expr;
+ops: id_expr | getters_debug /*| bool_expr*/ | merge_expr
+        | push_expr | pop_expr | split_expr | while_expr;
 
 num_expr: term ((PLUS^ | MINUS^) term)* ;
 term: (NUM | getters) (TIMES^ (getters | NUM))*;
 
+
+
 bool_expr: bool_and (OR^ bool_and)*;
 bool_and: bool_not (AND^ bool_not)*;
-bool_not: NOT^ bool_eval | bool_eval;
-bool_eval: (NUM (LTHAN^ | MTHAN^ | EQUALS^) NUM) | bool_vector;
+bool_not: NOT^ bool_eval | bool_par;
+bool_par: LPAR! bool_expr RPAR! | bool_eval;
+bool_eval: ((NUM | getters) (LTHAN^ | MTHAN^ | EQUALS^) (NUM | getters)) | bool_vector;
 bool_vector: (FULL^ | EMPTY^) LPAR! ID RPAR!;
 
 getters: (LENGTH^ | DIAMETER^) LPAR! ID RPAR!;
@@ -454,11 +555,18 @@ merge_expr: MERGE^ merge_basic_expr merge_basic_expr merge_basic_expr;
 merge_basic_expr: ID | (MERGE^ ID ID ID);
 tube_expr: (CONNECTOR^ | TUBEVECTOR^ OF!| (TUBE^ num_expr)) num_expr;
 
+push_expr: PUSH^ ID ID;
+pop_expr: POP^ ID ID;
 
-getters_debug:gettercon | getter | gettervector;
+split_expr: LPAR! ID ","! ID RPAR! ASSIG! SPLIT^ ID;
+
+while_expr: WHILE^ LPAR! bool_expr RPAR! plumber ENDWHILE!;
+
+getters_debug: gettercon | getter | gettervector;
 getter: GET^ ID ; // DEBUG
 gettervector: GETVECTOR^ ID ; // DEBUG
 gettercon: GETCONNECTOR^ ID ; // DEBUG
+
 
 
 //...
